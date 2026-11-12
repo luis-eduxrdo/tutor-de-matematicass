@@ -91,6 +91,7 @@ document.getElementById("adminForm").addEventListener("submit", async e => {
 });
 
 // CONSULTAR SOLICITUDES
+
 async function cargarSolicitudes() {
   const count = document.getElementById("requestCount");
   const list = document.getElementById("requestList");
@@ -110,6 +111,60 @@ async function cargarSolicitudes() {
       list.appendChild(li);
       return;
     }
+
+    solicitudes.forEach(x => {
+      const li = document.createElement("li");
+
+      const nombre = document.createElement("b");
+      nombre.textContent = x.nombre || "Sin nombre";
+
+      const detalle = document.createElement("p");
+      detalle.textContent =
+        `${x.nivel} — ${x.servicio}. ${x.mensaje}`;
+
+      const fecha = document.createElement("small");
+      fecha.textContent = x.createdAt
+        ? new Date(x.createdAt).toLocaleString("es-CO")
+        : "Fecha no disponible";
+
+      const estado = document.createElement("p");
+      estado.textContent = "Estado: " + (x.estado || "Nueva");
+
+      li.append(nombre, detalle, fecha, estado);
+
+      ["Nueva", "En proceso", "Atendida"].forEach(valor => {
+        const boton = document.createElement("button");
+
+        boton.type = "button";
+        boton.className = "request";
+        boton.textContent = valor;
+
+        boton.addEventListener("click", async () => {
+          boton.disabled = true;
+
+          try {
+            await apiRequest(`/api/requests/${x._id}/status`, {
+              method: "PATCH",
+              body: JSON.stringify({ estado: valor })
+            });
+
+            await cargarSolicitudes();
+          } catch (error) {
+            alert(error.message);
+            boton.disabled = false;
+          }
+        });
+
+        li.appendChild(boton);
+      });
+
+      list.appendChild(li);
+    });
+
+  } catch (error) {
+    count.textContent = error.message;
+  }
+}
 
     solicitudes.forEach(x => {
       const li = document.createElement("li");
