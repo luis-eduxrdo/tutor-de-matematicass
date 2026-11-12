@@ -90,6 +90,19 @@ document.getElementById("adminForm").addEventListener("submit", async e => {
   }
 });
 
+// CERRAR SESIÓN DEL ADMINISTRADOR
+document.getElementById("logoutBtn").addEventListener("click", () => {
+  localStorage.removeItem(tokenKey);
+
+  document.getElementById("dashboard").classList.add("hidden");
+  document.getElementById("adminForm").reset();
+  document.getElementById("adminMessage").textContent =
+    "Sesión cerrada correctamente.";
+
+  document.getElementById("requestList").replaceChildren();
+  document.getElementById("requestCount").textContent = "";
+});
+
 // CONSULTAR SOLICITUDES
 
 async function cargarSolicitudes() {
