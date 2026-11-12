@@ -1,7 +1,174 @@
-const key="tutorMateRequests";const read=()=>JSON.parse(localStorage.getItem(key)||"[]");const save=x=>{let a=read();a.push(x);localStorage.setItem(key,JSON.stringify(a))};
-document.getElementById("contactForm").addEventListener("submit",e=>{e.preventDefault();save({...Object.fromEntries(new FormData(e.target).entries()),fecha:new Date().toLocaleString("es-CO")});document.getElementById("formMessage").textContent="¡Gracias! La solicitud quedó guardada en este navegador.";e.target.reset()});
-document.querySelectorAll(".request[data-service]").forEach(b=>b.addEventListener("click",()=>{document.getElementById("serviceSelect").value=b.dataset.service;document.getElementById("contacto").scrollIntoView({behavior:"smooth"})}));
-document.getElementById("adminForm").addEventListener("submit",e=>{e.preventDefault();if(document.getElementById("adminUser").value==="admin"&&document.getElementById("adminPass").value==="mate123"){document.getElementById("dashboard").classList.remove("hidden");document.getElementById("requestCount").textContent=read().length+" solicitudes guardadas en este navegador." ;document.getElementById("adminMessage").textContent="Acceso de demostración correcto."}else document.getElementById("adminMessage").textContent="Datos incorrectos. Prueba admin / mate123."});
-document.getElementById("viewRequests").addEventListener("click",()=>{let a=read();document.getElementById("requestList").innerHTML=a.length?a.map(x=>`<li><b>${x.nombre}</b> — ${x.nivel}, ${x.servicio}<br>${x.mensaje}<br><small>${x.fecha}</small></li>`).join(""):"<li>Aún no hay solicitudes.</li>"});
-document.getElementById("assistantForm").addEventListener("submit",e=>{e.preventDefault();let q=document.getElementById("question").value.toLowerCase(),a;if(q.includes("fraccion"))a="Para sumar fracciones con igual denominador, suma los numeradores y conserva el denominador. Ejemplo: 2/5 + 1/5 = 3/5.";else if(q.includes("ecuacion")||q.includes("despejar"))a="Ejemplo: x + 4 = 9. Resta 4 en ambos lados y obtienes x = 5.";else if(q.includes("multiplic"))a="Multiplicar es sumar varias veces: 3 × 4 = 4 + 4 + 4 = 12.";else if(q.includes("division")||q.includes("dividir"))a="Dividir es repartir en partes iguales: 12 ÷ 3 = 4.";else if(q.includes("porcentaje"))a="20% de 50 = 0,20 × 50 = 10.";else if(q.includes("area"))a="El área de un rectángulo es base por altura. Ejemplo: 5 × 3 = 15 unidades cuadradas.";else a="Puedo orientarte con fracciones, ecuaciones, multiplicación, división, porcentajes y áreas. (Asistente demostrativo, no IA conectada a un modelo).";document.getElementById("answer").textContent=a+" — Asistente demostrativo, no es IA generativa."});
-document.getElementById("menuBtn").addEventListener("click",()=>document.getElementById("nav").classList.toggle("open"));document.querySelectorAll("#nav a").forEach(a=>a.addEventListener("click",()=>document.getElementById("nav").classList.remove("open")));
+
+const API = "https://tutor-matematicas-backend-zsd9.onrender.com";
+const tokenKey = "tutorMateAdminToken";
+
+const getToken = () => localStorage.getItem(tokenKey);
+
+async function apiRequest(path, options = {}) {
+  const response = await fetch(`${API}${path}`, {
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      ...(getToken() ? { Authorization: `Bearer ${getToken()}` } : {}),
+      ...options.headers
+    }
+  });
+
+  const data = await response.json().catch(() => ({}));
+
+  if (!response.ok) {
+    throw new Error(data.error || "Ocurrió un error al conectar con el servidor.");
+  }
+
+  return data;
+}
+
+// REGISTRAR SOLICITUDES EN MONGODB
+document.getElementById("contactForm").addEventListener("submit", async e => {
+  e.preventDefault();
+
+  const form = e.target;
+  const message = document.getElementById("formMessage");
+  const datos = Object.fromEntries(new FormData(form).entries());
+
+  message.textContent = "Enviando solicitud...";
+
+  try {
+    await apiRequest("/api/requests", {
+      method: "POST",
+      body: JSON.stringify({
+        nombre: datos.nombre,
+        correo: datos.correo,
+        nivel: datos.nivel,
+        servicio: datos.servicio,
+        mensaje: datos.mensaje
+      })
+    });
+
+    message.textContent = "¡Gracias! Tu solicitud fue guardada correctamente.";
+    form.reset();
+  } catch (error) {
+    message.textContent = error.message;
+  }
+});
+
+// BOTONES DE SERVICIOS
+document.querySelectorAll(".request[data-service]").forEach(b => {
+  b.addEventListener("click", () => {
+    document.getElementById("serviceSelect").value = b.dataset.service;
+    document.getElementById("contacto").scrollIntoView({
+      behavior: "smooth"
+    });
+  });
+});
+
+// INICIO DE SESIÓN DEL ADMINISTRADOR
+document.getElementById("adminForm").addEventListener("submit", async e => {
+  e.preventDefault();
+
+  const message = document.getElementById("adminMessage");
+  const correo = document.getElementById("adminUser").value.trim();
+  const password = document.getElementById("adminPass").value;
+
+  message.textContent = "Verificando acceso...";
+
+  try {
+    const data = await apiRequest("/api/auth/admin/login", {
+      method: "POST",
+      body: JSON.stringify({ correo, password })
+    });
+
+    localStorage.setItem(tokenKey, data.token);
+
+    document.getElementById("dashboard").classList.remove("hidden");
+    message.textContent = "Acceso correcto.";
+
+    await cargarSolicitudes();
+  } catch (error) {
+    localStorage.removeItem(tokenKey);
+    message.textContent = error.message;
+  }
+});
+
+// CONSULTAR SOLICITUDES
+async function cargarSolicitudes() {
+  const count = document.getElementById("requestCount");
+  const list = document.getElementById("requestList");
+
+  count.textContent = "Consultando solicitudes...";
+  list.replaceChildren();
+
+  try {
+    const solicitudes = await apiRequest("/api/requests");
+
+    count.textContent =
+      solicitudes.length + " solicitudes registradas en la base de datos.";
+
+    if (!solicitudes.length) {
+      const li = document.createElement("li");
+      li.textContent = "Aún no hay solicitudes.";
+      list.appendChild(li);
+      return;
+    }
+
+    solicitudes.forEach(x => {
+      const li = document.createElement("li");
+      const nombre = document.createElement("b");
+      const detalle = document.createElement("p");
+      const fecha = document.createElement("small");
+
+      nombre.textContent = x.nombre || "Sin nombre";
+      detalle.textContent =
+        `${x.nivel} — ${x.servicio}. ${x.mensaje}`;
+      fecha.textContent =
+        x.createdAt
+          ? new Date(x.createdAt).toLocaleString("es-CO")
+          : "Fecha no disponible";
+
+      li.append(nombre, detalle, fecha);
+      list.appendChild(li);
+    });
+  } catch (error) {
+    count.textContent = error.message;
+  }
+}
+
+document.getElementById("viewRequests").addEventListener("click", cargarSolicitudes);
+
+// ASISTENTE DEMOSTRATIVO
+document.getElementById("assistantForm").addEventListener("submit", e => {
+  e.preventDefault();
+
+  let q = document.getElementById("question").value.toLowerCase();
+  let a;
+
+  if (q.includes("fraccion")) {
+    a = "Para sumar fracciones con igual denominador, suma los numeradores y conserva el denominador. Ejemplo: 2/5 + 1/5 = 3/5.";
+  } else if (q.includes("ecuacion") || q.includes("despejar")) {
+    a = "Ejemplo: x + 4 = 9. Resta 4 en ambos lados y obtienes x = 5.";
+  } else if (q.includes("multiplic")) {
+    a = "Multiplicar es sumar varias veces: 3 × 4 = 4 + 4 + 4 = 12.";
+  } else if (q.includes("division") || q.includes("dividir")) {
+    a = "Dividir es repartir en partes iguales: 12 ÷ 3 = 4.";
+  } else if (q.includes("porcentaje")) {
+    a = "20% de 50 = 0,20 × 50 = 10.";
+  } else if (q.includes("area")) {
+    a = "El área de un rectángulo es base por altura. Ejemplo: 5 × 3 = 15 unidades cuadradas.";
+  } else {
+    a = "Puedo orientarte con fracciones, ecuaciones, multiplicación, división, porcentajes y áreas.";
+  }
+
+  document.getElementById("answer").textContent =
+    a + " — Asistente demostrativo, no es IA generativa.";
+});
+
+// MENÚ
+document.getElementById("menuBtn").addEventListener("click", () => {
+  document.getElementById("nav").classList.toggle("open");
+});
+
+document.querySelectorAll("#nav a").forEach(a => {
+  a.addEventListener("click", () => {
+    document.getElementById("nav").classList.remove("open");
+  });
+});
