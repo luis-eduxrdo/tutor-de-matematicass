@@ -166,28 +166,6 @@ async function cargarSolicitudes() {
   }
 }
 
-    solicitudes.forEach(x => {
-      const li = document.createElement("li");
-      const nombre = document.createElement("b");
-      const detalle = document.createElement("p");
-      const fecha = document.createElement("small");
-
-      nombre.textContent = x.nombre || "Sin nombre";
-      detalle.textContent =
-        `${x.nivel} — ${x.servicio}. ${x.mensaje}`;
-      fecha.textContent =
-        x.createdAt
-          ? new Date(x.createdAt).toLocaleString("es-CO")
-          : "Fecha no disponible";
-
-      li.append(nombre, detalle, fecha);
-      list.appendChild(li);
-    });
-  } catch (error) {
-    count.textContent = error.message;
-  }
-}
-
 document.getElementById("viewRequests").addEventListener("click", cargarSolicitudes);
 
 // ASISTENTE DEMOSTRATIVO
